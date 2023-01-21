@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 */
+using LibGit2Sharp;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -35,6 +36,19 @@ namespace ResignBSP
     {
         static string inf2cat = @"C:\Program Files (x86)\Windows Kits\10\bin\x86\Inf2Cat.exe";
         static string signtool = @"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64\signtool.exe";
+        static bool useGitDiff = false;
+
+        public static string[] GetModifiedDirectoriesFromGitRepo(string gitRepoPath)
+        {
+            Console.WriteLine("Opening repository");
+            using var repository = new Repository(gitRepoPath);
+            Console.WriteLine("Getting changes");
+            TreeChanges changes = repository.Diff.Compare<TreeChanges>();
+            Console.WriteLine("Getting modified dirs");
+            string[] modifiedDirectories = changes.Added.Union(changes.Modified).Union(changes.Renamed).Union(changes.Deleted).Union(changes.TypeChanged).Union(changes.Copied)
+                .Select(x => Path.Combine(gitRepoPath, Path.GetDirectoryName(x.Path))).Distinct().ToArray();
+            return modifiedDirectories;
+        }
 
         static void Main(string[] args)
         {
@@ -77,7 +91,17 @@ namespace ResignBSP
 
                 foreach (var dir in Directories)
                 {
-                    ProcessDirectory(dir);
+                    if (useGitDiff)
+                    {
+                        foreach (var gitDir in GetModifiedDirectoriesFromGitRepo(dir))
+                        {
+                            ProcessDirectory(gitDir);
+                        }
+                    }
+                    else
+                    {
+                        ProcessDirectory(dir);
+                    }
                 }
             }
             catch (Exception ex)

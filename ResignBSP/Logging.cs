@@ -34,14 +34,21 @@ namespace ResignBSP
             Error
         }
 
-        private static readonly object lockObj = new object();
+        private static readonly ConsoleColor Foreground;
 
-        public static void ShowProgress(Int64 CurrentProgress, Int64 TotalProgress, DateTime startTime, bool DisplayRed)
+        static Logging()
+        {
+            Foreground = Console.ForegroundColor;
+        }
+
+        private static readonly object lockObj = new();
+
+        public static void ShowProgress(long CurrentProgress, long TotalProgress, DateTime startTime, bool DisplayRed)
         {
             DateTime now = DateTime.Now;
             TimeSpan timeSoFar = now - startTime;
 
-            TimeSpan remaining = new TimeSpan(0);
+            TimeSpan remaining = new(0);
 
             try
             {
@@ -55,18 +62,23 @@ namespace ResignBSP
                 CurrentProgress = 1;
             }
 
-            Logging.Log(string.Format("{0} {1:hh\\:mm\\:ss\\.f}", GetDismLikeProgBar((Int32)(CurrentProgress * 100 / TotalProgress)), remaining, remaining.TotalHours, remaining.Minutes, remaining.Seconds, remaining.Milliseconds), returnline: false, severity: DisplayRed ? Logging.LoggingLevel.Warning : Logging.LoggingLevel.Information);
+            Log(string.Format("{0} {1:hh\\:mm\\:ss\\.f}", GetDismLikeProgBar((int)(CurrentProgress * 100 / TotalProgress)), remaining, remaining.TotalHours, remaining.Minutes, remaining.Seconds, remaining.Milliseconds), returnline: false, severity: DisplayRed ? LoggingLevel.Warning : LoggingLevel.Information);
         }
 
-        private static string GetDismLikeProgBar(Int32 perc)
+        private static string GetDismLikeProgBar(int perc)
         {
-            Int32 eqsLength = (Int32)((Double)perc / 100 * 55);
+            int eqsLength = (int)((double)perc / 100 * 55);
             string bases = new string('=', eqsLength) + new string(' ', 55 - eqsLength);
             bases = bases.Insert(28, perc + "%");
             if (perc == 100)
-                bases = bases.Substring(1);
+            {
+                bases = bases[1..];
+            }
             else if (perc < 10)
+            {
                 bases = bases.Insert(28, " ");
+            }
+
             return "[" + bases + "]";
         }
 
@@ -74,13 +86,13 @@ namespace ResignBSP
         {
             lock (lockObj)
             {
-                if (message == "")
+                if (message?.Length == 0)
                 {
                     Console.WriteLine();
                     return;
                 }
 
-                var msg = "";
+                string msg = "";
 
                 switch (severity)
                 {
@@ -88,22 +100,28 @@ namespace ResignBSP
                         msg = "  Warning  ";
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         break;
+
                     case LoggingLevel.Error:
                         msg = "   Error   ";
                         Console.ForegroundColor = ConsoleColor.Red;
                         break;
+
                     case LoggingLevel.Information:
                         msg = "Information";
-                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.ForegroundColor = Foreground;
                         break;
                 }
 
                 if (returnline)
+                {
                     Console.WriteLine(DateTime.Now.ToString("'['HH':'mm':'ss']'") + "[" + msg + "] " + message);
+                }
                 else
+                {
                     Console.Write("\r" + DateTime.Now.ToString("'['HH':'mm':'ss']'") + "[" + msg + "] " + message);
+                }
 
-                Console.ForegroundColor = ConsoleColor.White;
+                Console.ForegroundColor = Foreground;
             }
         }
     }

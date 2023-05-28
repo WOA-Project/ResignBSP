@@ -21,9 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 */
-using LibGit2Sharp;
-using Microsoft.Win32;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -32,75 +30,83 @@ using System.Reflection;
 
 namespace ResignBSP
 {
-    class Program
+    internal class Program
     {
-        static string inf2cat = @"C:\Program Files (x86)\Windows Kits\10\bin\x86\Inf2Cat.exe";
-        static string signtool = @"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64\signtool.exe";
-        static bool useGitDiff = false;
-
-        public static string[] GetModifiedDirectoriesFromGitRepo(string gitRepoPath)
+        private static void PrintBanner()
         {
-            Console.WriteLine("Opening repository");
-            using var repository = new Repository(gitRepoPath);
-            Console.WriteLine("Getting changes");
-            TreeChanges changes = repository.Diff.Compare<TreeChanges>();
-            Console.WriteLine("Getting modified dirs");
-            string[] modifiedDirectories = changes.Added.Union(changes.Modified).Union(changes.Renamed).Union(changes.Deleted).Union(changes.TypeChanged).Union(changes.Copied)
-                .Select(x => Path.Combine(gitRepoPath, Path.GetDirectoryName(x.Path))).Distinct().ToArray();
-            return modifiedDirectories;
-        }
-
-        static void Main(string[] args)
-        {
-            Console.Title = "ResignBSP";
-
             Logging.Log($"ResignBSP {Assembly.GetExecutingAssembly().GetName().Version}");
-            Logging.Log("Copyright (c) 2017-2022, The LumiaWOA & DuoWOA Authors");
+            Logging.Log("Copyright (c) 2017-2023, The LumiaWOA Authors");
             Logging.Log("https://github.com/WOA-Project/ResignBSP");
             Logging.Log("");
             Logging.Log("This program comes with ABSOLUTELY NO WARRANTY.");
             Logging.Log("This is free software, and you are welcome to redistribute it under certain conditions.");
             Logging.Log("");
+        }
+
+        private static void Main(string[] args)
+        {
+            Console.Title = "ResignBSP";
+            PrintBanner();
 
             try
             {
-                string[] ToolsPaths = GetInstalledKitToolsPaths();
-
-                foreach (string ToolsPath in ToolsPaths)
+                if (!File.Exists(Constants.inf2cat) || !File.Exists(Constants.signtool))
                 {
-                    inf2cat = Path.Combine(ToolsPath, "x86", "Inf2Cat.exe");
-                    signtool = Path.Combine(ToolsPath, "x64", "signtool.exe");
+                    string[] ToolsPaths = KitsHelper.GetInstalledKitToolsPaths();
 
-                    if (File.Exists(inf2cat) && File.Exists(signtool))
+                    foreach (string ToolsPath in ToolsPaths)
                     {
-                        break;
+                        Constants.inf2cat = Path.Combine(ToolsPath, "x86", "Inf2Cat.exe");
+                        Constants.signtool = Path.Combine(ToolsPath, "x64", "signtool.exe");
+
+                        if (File.Exists(Constants.inf2cat) && File.Exists(Constants.signtool))
+                        {
+                            break;
+                        }
                     }
                 }
 
-                if (!File.Exists(inf2cat) || !File.Exists(signtool))
+                if (!File.Exists(Constants.inf2cat) || !File.Exists(Constants.signtool))
                 {
                     throw new Exception("No Windows Kits is installed on the machine");
                 }
 
-                if (args.Count() <= 0)
+                if (args.Length <= 0)
                 {
                     throw new Exception("No arguments specified");
                 }
 
                 string[] Directories = args;
 
-                foreach (var dir in Directories)
+                if (args[0].EndsWith(".pfx") && args.Length > 2)
                 {
-                    if (useGitDiff)
+                    Directories = args.Skip(2).ToArray();
+                    Constants.cert = args[0];
+                    Constants.certpassword = args[1];
+                }
+
+                if (!File.Exists(Constants.cert))
+                {
+                    throw new Exception("No certificates found on the machine");
+                }
+
+                foreach (var directory in Directories)
+                {
+                    try
                     {
-                        foreach (var gitDir in GetModifiedDirectoriesFromGitRepo(dir))
+                        string[] gitModifiedPaths = GitHelper.GetModifiedDirectoriesFromGitRepo(directory);
+                        foreach (string dir in gitModifiedPaths)
                         {
-                            ProcessDirectory(gitDir);
+                            try
+                            {
+                                ProcessDirectory(dir);
+                            }
+                            catch { }
                         }
                     }
-                    else
+                    catch
                     {
-                        ProcessDirectory(dir);
+                        ProcessDirectory(directory);
                     }
                 }
             }
@@ -111,26 +117,49 @@ namespace ResignBSP
             }
         }
 
-        static void SignFile(string filePath)
+        internal static void SignFile(string filePath, bool usermodesigning = false)
         {
             Process process = new();
             process.StartInfo.FileName = signtool;
             process.StartInfo.Arguments = "sign /td sha256 /fd sha256 " + <REDACTED FOR SOURCE CODE COMPLIANCE> + " /tr http://timestamp.digicert.com \"" + filePath + "\"";
             process.StartInfo.UseShellExecute = false;
-            process.Start();
+            _ = process.Start();
             process.WaitForExit();
         }
 
-        static void ProcessDirectory(string Directory)
+        private static void ProcessDirectory(string Directory)
         {
+            //GenerateCatalog(Directory, "6_3_ARM,10_RS3_ARM64");
+            //GenerateCatalog(Directory, "6_3_ARM");
+            GenerateCatalogs(Directory, "10_RS3_ARM64");
+            SignCatalogs(Directory);
+        }
 
-            var DirsWithInfs = GetDirectoriesWithInfs(Directory);
+        private static void SignCatalogs(string Directory)
+        {
+            IEnumerable<string> cats = System.IO.Directory.EnumerateFiles(Directory, "*.cat", SearchOption.AllDirectories);
 
-            foreach (var dir in DirsWithInfs)
+            foreach (string cat in cats)
             {
-                if (System.IO.Directory.EnumerateFiles(dir, "*.cat_").Count() > 0)
+                if (cat.EndsWith(".cat_"))
                 {
-                    var backup = Console.ForegroundColor;
+                    continue;
+                }
+
+                Logging.Log("Signing: " + cat);
+                SignFile(cat);
+            }
+        }
+
+        private static void GenerateCatalogs(string Directory, string OSKey)
+        {
+            List<string> DirsWithInfs = GetDirectoriesWithInfs(Directory);
+
+            foreach (string dir in DirsWithInfs)
+            {
+                if (System.IO.Directory.EnumerateFiles(dir, "*.cat_").Any())
+                {
+                    ConsoleColor backup = Console.ForegroundColor;
                     Console.ForegroundColor = ConsoleColor.Red;
                     Logging.Log("RESOURCE PACKAGE");
                     Console.ForegroundColor = backup;
@@ -138,137 +167,44 @@ namespace ResignBSP
 
                 Logging.Log("Generating catalog: " + dir);
                 Process process = new();
-                process.StartInfo.FileName = inf2cat;
-                process.StartInfo.Arguments = "/OS:6_3_ARM,10_RS3_ARM64 /Driver:\"" + dir + "\"";
+                process.StartInfo.FileName = Constants.inf2cat;
+                process.StartInfo.Arguments = $"/OS:{OSKey} /Driver:\"{dir}\"";
                 process.StartInfo.UseShellExecute = false;
-                process.Start();
+                _ = process.Start();
                 process.WaitForExit();
-                if (process.ExitCode != 0)
-                {
-                    process.Dispose();
-                    process = new();
-                    process.StartInfo.FileName = inf2cat;
-                    process.StartInfo.Arguments = "/OS:6_3_ARM /Driver:\"" + dir + "\"";
-                    process.StartInfo.UseShellExecute = false;
-                    process.Start();
-                    process.WaitForExit();
-
-                    process.Dispose();
-                    process = new();
-                    process.StartInfo.FileName = inf2cat;
-                    process.StartInfo.Arguments = "/OS:10_RS3_ARM64 /Driver:\"" + dir + "\"";
-                    process.StartInfo.UseShellExecute = false;
-                    process.Start();
-                    process.WaitForExit();
-                }
-            }
-
-            var cats = System.IO.Directory.EnumerateFiles(Directory, "*.cat", System.IO.SearchOption.AllDirectories);
-
-            foreach (var cat in cats)
-            {
-                if (cat.EndsWith(".cat_"))
-                    continue;
-                Logging.Log("Signing: " + cat);
-                SignFile(cat);
+                process.Dispose();
             }
         }
 
-        static List<string> GetFilesToSign(string Directory)
+        private static List<string> GetDirectoriesWithInfs(string Directory)
         {
-            var SysFiles = System.IO.Directory.EnumerateFiles(Directory, "*.sys", System.IO.SearchOption.AllDirectories);
-            var DllFiles = System.IO.Directory.EnumerateFiles(Directory, "*.dll", System.IO.SearchOption.AllDirectories);
-            var ExeFiles = System.IO.Directory.EnumerateFiles(Directory, "*.exe", System.IO.SearchOption.AllDirectories);
-
-            List<string> files = new List<string>();
-            files.AddRange(SysFiles);
-            files.AddRange(DllFiles);
-            files.AddRange(ExeFiles);
-
-            return files;
-        }
-
-        static List<string> GetDirectoriesWithInfs_(string Directory)
-        {
-            var InfFiles = System.IO.Directory.EnumerateFiles(Directory, "*.inf_", System.IO.SearchOption.AllDirectories);
-            var DirsWithInfs = new List<string>();
-
-            foreach (var dir in InfFiles)
-                DirsWithInfs.Add(string.Join("\\", dir.Split('\\').Reverse().Skip(1).Reverse()));
-
-            var DirsWithInfs2 = DirsWithInfs.Distinct().OrderBy(x => x);
-            var lst = new List<string>();
-
-            foreach (var dir in DirsWithInfs2)
+            List<string> lst = new();
+            try
             {
-                if (!lst.Any(x => dir.ToLower().StartsWith(x.ToLower())))
+                IEnumerable<string> InfFiles = System.IO.Directory.EnumerateFiles(Directory, "*.inf", SearchOption.AllDirectories);
+                List<string> DirsWithInfs = new();
+
+                foreach (string dir in InfFiles)
                 {
-                    lst.Add(dir);
+                    DirsWithInfs.Add(string.Join("\\", dir.Split('\\').Reverse().Skip(1).Reverse()));
                 }
+
+                IOrderedEnumerable<string> DirsWithInfs2 = DirsWithInfs.Distinct().OrderBy(x => x);
+
+                foreach (string dir in DirsWithInfs2)
+                {
+                    //if (!lst.Any(x => dir.ToLower().StartsWith(x.ToLower())))
+                    {
+                        lst.Add(dir);
+                    }
+                }
+            }
+            catch
+            {
+
             }
 
             return lst;
-        }
-
-        static List<string> GetDirectoriesWithInfs(string Directory)
-        {
-            var InfFiles = System.IO.Directory.EnumerateFiles(Directory, "*.inf", System.IO.SearchOption.AllDirectories);
-            var DirsWithInfs = new List<string>();
-
-            foreach (var dir in InfFiles)
-                DirsWithInfs.Add(string.Join("\\", dir.Split('\\').Reverse().Skip(1).Reverse()));
-
-            var DirsWithInfs2 = DirsWithInfs.Distinct().OrderBy(x => x);
-            var lst = new List<string>();
-
-            foreach (var dir in DirsWithInfs2)
-            {
-                //if (!lst.Any(x => dir.ToLower().StartsWith(x.ToLower())))
-                {
-                    lst.Add(dir);
-                }
-            }
-
-            return lst;
-        }
-
-        public static string[] GetInstalledKitToolsPaths()
-        {
-            using (RegistryKey localMachine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Default))
-            {
-                using (RegistryKey installedRoots = localMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows Kits\Installed Roots"))
-                {
-                    if (installedRoots == null)
-                    {
-                        throw new Exception("No Windows Kits is installed on the machine");
-                    }
-
-                    string KitsRoot10 = (string)installedRoots.GetValue("KitsRoot10");
-
-                    if (KitsRoot10 == null)
-                    {
-                        throw new Exception("No Windows Kits is installed on the machine");
-                    }
-
-                    string[] installedVersions = installedRoots.GetSubKeyNames();
-
-                    IOrderedEnumerable<string> filteredInstalledVersions = (new List<string>(installedVersions))
-                        .Where(x => x.Count(y => y == '.') == 3)
-                        .OrderBy(x =>
-                        {
-                            ulong BuildNumber = 0;
-                            ulong.TryParse(x.Split('.')[2], out BuildNumber);
-                            return x;
-                        });
-
-                    if (filteredInstalledVersions.Count() <= 0)
-                    {
-                        throw new Exception("No Windows Kits is installed on the machine");
-                    }
-
-                    return filteredInstalledVersions.Select(x => Path.Combine(KitsRoot10, "bin", x)).ToArray();
-                }
-            }
         }
     }
 }

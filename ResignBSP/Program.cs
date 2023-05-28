@@ -120,8 +120,8 @@ namespace ResignBSP
         internal static void SignFile(string filePath, bool usermodesigning = false)
         {
             Process process = new();
-            process.StartInfo.FileName = signtool;
-            process.StartInfo.Arguments = "sign /td sha256 /fd sha256 " + <REDACTED FOR SOURCE CODE COMPLIANCE> + " /tr http://timestamp.digicert.com \"" + filePath + "\"";
+            process.StartInfo.FileName = Constants.signtool;
+            process.StartInfo.Arguments = "sign /td sha256 /fd sha256 /f \"" + (usermodesigning ? Constants.cert2 : Constants.cert) + "\" /p \"" + Constants.certpassword + "\" /tr http://timestamp.digicert.com \"" + filePath + "\"";
             process.StartInfo.UseShellExecute = false;
             _ = process.Start();
             process.WaitForExit();

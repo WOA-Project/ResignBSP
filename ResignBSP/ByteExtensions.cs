@@ -4,7 +4,7 @@ namespace ResignBSP
 {
     internal static class ByteExtensions
     {
-        private static readonly int[] Empty = new int[0];
+        private static readonly int[] Empty = [];
 
         public static int[] Locate(this byte[] self, byte[] candidate)
         {
@@ -13,7 +13,7 @@ namespace ResignBSP
                 return Empty;
             }
 
-            List<int>? list = new();
+            List<int>? list = [];
 
             for (int i = 0; i < self.Length; i++)
             {
@@ -54,6 +54,5 @@ namespace ResignBSP
                 || candidate.Length == 0
                 || candidate.Length > array.Length;
         }
-
     }
 }

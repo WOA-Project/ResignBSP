@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 */
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -50,63 +50,157 @@ namespace ResignBSP
 
             try
             {
-                if (!File.Exists(Constants.inf2cat) || !File.Exists(Constants.signtool))
+                if (!File.Exists(Constants.INF2CAT) || !File.Exists(Constants.SignTool))
                 {
                     string[] ToolsPaths = KitsHelper.GetInstalledKitToolsPaths();
 
                     foreach (string ToolsPath in ToolsPaths)
                     {
-                        Constants.inf2cat = Path.Combine(ToolsPath, "x86", "Inf2Cat.exe");
-                        Constants.signtool = Path.Combine(ToolsPath, "x64", "signtool.exe");
+                        Constants.INF2CAT = Path.Combine(ToolsPath, "x86", "Inf2Cat.exe");
+                        Constants.SignTool = Path.Combine(ToolsPath, "x64", "signtool.exe");
 
-                        if (File.Exists(Constants.inf2cat) && File.Exists(Constants.signtool))
+                        if (File.Exists(Constants.INF2CAT) && File.Exists(Constants.SignTool))
                         {
                             break;
                         }
                     }
                 }
 
-                if (!File.Exists(Constants.inf2cat) || !File.Exists(Constants.signtool))
+                if (!File.Exists(Constants.INF2CAT) || !File.Exists(Constants.SignTool))
                 {
                     throw new Exception("No Windows Kits is installed on the machine");
                 }
 
-                if (args.Length <= 0)
+                if (args.Length < 4)
                 {
-                    throw new Exception("No arguments specified");
+                    throw new Exception("No arguments specified. Usage: <KMDF Cert> <UMDF Cert> <Cert Password> <Directory> ... <Directory>");
                 }
 
-                string[] Directories = args;
+                Constants.kernelModeCertificate = args[0];
+                Constants.userModeCertificate = args[1];
+                Constants.certificatePassword = args[2];
 
-                if (args[0].EndsWith(".pfx") && args.Length > 2)
+                if (!File.Exists(Constants.kernelModeCertificate))
                 {
-                    Directories = args.Skip(2).ToArray();
-                    Constants.cert = args[0];
-                    Constants.certpassword = args[1];
+                    throw new Exception("No KMDF certificates found on the machine");
                 }
 
-                if (!File.Exists(Constants.cert))
+                if (!File.Exists(Constants.userModeCertificate))
                 {
-                    throw new Exception("No certificates found on the machine");
+                    throw new Exception("No UMDF certificates found on the machine");
                 }
 
-                foreach (var directory in Directories)
+                string[] Paths = args.Skip(3).Select(Path.GetFullPath).ToArray();
+
+                foreach (string path in Paths)
                 {
-                    try
+                    if (!Directory.Exists(path))
                     {
-                        string[] gitModifiedPaths = GitHelper.GetModifiedDirectoriesFromGitRepo(directory);
-                        foreach (string dir in gitModifiedPaths)
+                        if (!File.Exists(path))
                         {
-                            try
+                            throw new Exception($"Path {path} does not exist");
+                        }
+                        else
+                        {
+                            switch (Path.GetExtension(path)?.ToLower())
                             {
-                                ProcessDirectory(dir);
+                                case ".exe":
+                                case ".dll":
+                                    {
+                                        SignFile(path, true);
+                                        break;
+                                    }
+                                case ".sys":
+                                    {
+                                        SignFile(path);
+                                        break;
+                                    }
+				case ".cat":
+				case ".inf":
+                                    {
+                                        try
+                                        {
+                                            ProcessDirectory(Path.GetDirectoryName(path));
+                                        }
+                                        catch { }
+                                        break;
+                                    }
+
+                                default:
+                                    {
+                                        throw new Exception($"File {path} is not a valid file");
+                                    }
                             }
-                            catch { }
                         }
                     }
-                    catch
+                    else
                     {
-                        ProcessDirectory(directory);
+                        try
+                        {
+                            string[] gitModifiedPaths = GitHelper.GetModifiedPathsFromGitRepo(path);
+                            foreach (string file in gitModifiedPaths)
+                            {
+                                try
+                                {
+                                    switch (Path.GetExtension(file)?.ToLower())
+                                    {
+                                        case ".exe":
+                                        case ".dll":
+                                            {
+                                                SignFile(file, true);
+                                                break;
+                                            }
+                                        case ".sys":
+                                            {
+                                                SignFile(file);
+                                                break;
+                                            }
+                                    }
+                                }
+                                catch { Console.WriteLine($"Failed! {file}"); }
+                            }
+                        }
+                        catch
+                        {
+                            foreach (string file in Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories))
+                            {
+                                try
+                                {
+                                    switch (Path.GetExtension(file)?.ToLower())
+                                    {
+                                        case ".exe":
+                                        case ".dll":
+                                            {
+                                                SignFile(file, true);
+                                                break;
+                                            }
+                                        case ".sys":
+                                            {
+                                                SignFile(file);
+                                                break;
+                                            }
+                                    }
+                                }
+                                catch { Console.WriteLine($"Failed! {file}"); }
+                            }
+                        }
+
+                        try
+                        {
+                            string[] gitModifiedPaths = GitHelper.GetModifiedDirectoriesFromGitRepo(path);
+                            foreach (string dir in gitModifiedPaths)
+                            {
+                                try
+                                {
+                                    ProcessDirectory(dir);
+                                }
+                                catch { }
+                            }
+                        }
+                        catch
+                        {
+                            ProcessDirectory(path);
+                        }
                     }
                 }
             }
@@ -117,11 +211,13 @@ namespace ResignBSP
             }
         }
 
-        internal static void SignFile(string filePath, bool usermodesigning = false)
+        internal static void SignFile(string filePath, bool userModeSigning = false)
         {
+            Logging.Log($"Signing: {filePath}");
+
             Process process = new();
-            process.StartInfo.FileName = Constants.signtool;
-            process.StartInfo.Arguments = "sign /td sha256 /fd sha256 /f \"" + (usermodesigning ? Constants.cert2 : Constants.cert) + "\" /p \"" + Constants.certpassword + "\" /tr http://timestamp.digicert.com \"" + filePath + "\"";
+            process.StartInfo.FileName = Constants.SignTool;
+            process.StartInfo.Arguments = $@"sign /td sha256 /fd sha256 /f ""{(userModeSigning ? Constants.userModeCertificate : Constants.kernelModeCertificate)}"" /p ""{Constants.certificatePassword}"" /tr http://timestamp.digicert.com ""{filePath}""";
             process.StartInfo.UseShellExecute = false;
             _ = process.Start();
             process.WaitForExit();
@@ -129,8 +225,9 @@ namespace ResignBSP
 
         private static void ProcessDirectory(string Directory)
         {
-            //GenerateCatalog(Directory, "6_3_ARM,10_RS3_ARM64");
-            //GenerateCatalog(Directory, "6_3_ARM");
+            // 6_3_ARM,10_RS3_ARM64
+            // 6_3_ARM
+            // 10_RS3_X64
             GenerateCatalogs(Directory, "10_RS3_ARM64");
             SignCatalogs(Directory);
         }
@@ -146,16 +243,15 @@ namespace ResignBSP
                     continue;
                 }
 
-                Logging.Log("Signing: " + cat);
                 SignFile(cat);
             }
         }
 
         private static void GenerateCatalogs(string Directory, string OSKey)
         {
-            List<string> DirsWithInfs = GetDirectoriesWithInfs(Directory);
+            List<string> DirectoriesWithINFFiles = GetDirectoriesWithINFFiles(Directory);
 
-            foreach (string dir in DirsWithInfs)
+            foreach (string dir in DirectoriesWithINFFiles)
             {
                 if (System.IO.Directory.EnumerateFiles(dir, "*.cat_").Any())
                 {
@@ -165,10 +261,22 @@ namespace ResignBSP
                     Console.ForegroundColor = backup;
                 }
 
-                Logging.Log("Generating catalog: " + dir);
+                IEnumerable<string> cats = System.IO.Directory.EnumerateFiles(dir, "*.cat", SearchOption.AllDirectories);
+
+                foreach (string cat in cats)
+                {
+                    if (cat.EndsWith(".cat_"))
+                    {
+                        continue;
+                    }
+
+                    File.Delete(cat);
+                }
+
+                Logging.Log($"Generating catalog: {dir}");
                 Process process = new();
-                process.StartInfo.FileName = Constants.inf2cat;
-                process.StartInfo.Arguments = $"/OS:{OSKey} /Driver:\"{dir}\"";
+                process.StartInfo.FileName = Constants.INF2CAT;
+                process.StartInfo.Arguments = $@"/OS:{OSKey} /Driver:""{dir}""";
                 process.StartInfo.UseShellExecute = false;
                 _ = process.Start();
                 process.WaitForExit();
@@ -176,22 +284,22 @@ namespace ResignBSP
             }
         }
 
-        private static List<string> GetDirectoriesWithInfs(string Directory)
+        private static List<string> GetDirectoriesWithINFFiles(string Directory)
         {
-            List<string> lst = new();
+            List<string> lst = [];
             try
             {
                 IEnumerable<string> InfFiles = System.IO.Directory.EnumerateFiles(Directory, "*.inf", SearchOption.AllDirectories);
-                List<string> DirsWithInfs = new();
+                List<string> DirectoriesWithINFFiles = [];
 
                 foreach (string dir in InfFiles)
                 {
-                    DirsWithInfs.Add(string.Join("\\", dir.Split('\\').Reverse().Skip(1).Reverse()));
+                    DirectoriesWithINFFiles.Add(string.Join(@"\", dir.Split('\\').Reverse().Skip(1).Reverse()));
                 }
 
-                IOrderedEnumerable<string> DirsWithInfs2 = DirsWithInfs.Distinct().OrderBy(x => x);
+                IOrderedEnumerable<string> DirectoriesWithINFFiles2 = DirectoriesWithINFFiles.Distinct().OrderBy(x => x);
 
-                foreach (string dir in DirsWithInfs2)
+                foreach (string dir in DirectoriesWithINFFiles2)
                 {
                     //if (!lst.Any(x => dir.ToLower().StartsWith(x.ToLower())))
                     {

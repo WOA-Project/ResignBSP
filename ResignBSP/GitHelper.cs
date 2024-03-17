@@ -7,9 +7,9 @@ namespace ResignBSP
 {
     internal class GitHelper
     {
-        internal static string[] GetModifiedDirectoriesFromGitRepo(string gitRepoPath)
+        internal static string[] GetModifiedPathsFromGitRepo(string gitRepoPath)
         {
-            HashSet<string> modifiedPaths = new();
+            HashSet<string> modifiedPaths = [];
 
             using Repository repository = new(gitRepoPath);
 
@@ -107,7 +107,14 @@ namespace ResignBSP
                 _ = modifiedPaths.Add(element);
             }
 
-            string[] modifiedDirectories = modifiedPaths.Select(x => Path.Combine(gitRepoPath, Path.GetDirectoryName(x))).Distinct().ToArray();
+            string[] modifiedFiles = modifiedPaths.Select(x => Path.Combine(gitRepoPath, x)).Distinct().ToArray();
+            return modifiedFiles;
+        }
+
+        internal static string[] GetModifiedDirectoriesFromGitRepo(string gitRepoPath)
+        {
+            string[] modifiedFiles = GetModifiedPathsFromGitRepo(gitRepoPath);
+            string[] modifiedDirectories = modifiedFiles.Select(Path.GetDirectoryName).Distinct().ToArray();
             return modifiedDirectories;
         }
     }

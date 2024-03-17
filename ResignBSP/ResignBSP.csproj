@@ -1,14 +1,99 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0-windows</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <OutputType>Exe</OutputType>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <Platforms>x64;ARM64</Platforms>
+    <Platforms>x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="WDK\appxpackaging.dll" />
+    <None Remove="WDK\appxsip.dll" />
+    <None Remove="WDK\Inf2Cat.exe" />
+    <None Remove="WDK\inf2cat.exe.manifest" />
+    <None Remove="WDK\Microsoft.MarketplaceServices.Ingestion.HardwareDomainData.dll" />
+    <None Remove="WDK\Microsoft.UniversalStore.HardwareWorkflow.Cabinets.dll" />
+    <None Remove="WDK\Microsoft.UniversalStore.HardwareWorkflow.Catalogs.dll" />
+    <None Remove="WDK\Microsoft.UniversalStore.HardwareWorkflow.InfReader.dll" />
+    <None Remove="WDK\Microsoft.UniversalStore.HardwareWorkflow.SubmissionBuilder.dll" />
+    <None Remove="WDK\Microsoft.Windows.Build.Appx.AppxPackaging.dll.manifest" />
+    <None Remove="WDK\Microsoft.Windows.Build.Appx.AppxSip.dll.manifest" />
+    <None Remove="WDK\Microsoft.Windows.Build.Appx.OpcServices.dll.manifest" />
+    <None Remove="WDK\Microsoft.Windows.Build.Signing.mssign32.dll.manifest" />
+    <None Remove="WDK\Microsoft.Windows.Build.Signing.wintrust.dll.manifest" />
+    <None Remove="WDK\mssign32.dll" />
+    <None Remove="WDK\opcservices.dll" />
+    <None Remove="WDK\signtool.exe" />
+    <None Remove="WDK\signtool.exe.manifest" />
+    <None Remove="WDK\WindowsProtectedFiles.xml" />
+    <None Remove="WDK\wintrust.dll" />
+    <None Remove="WDK\wintrust.dll.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="WDK\appxpackaging.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\appxsip.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Inf2Cat.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\inf2cat.exe.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.MarketplaceServices.Ingestion.HardwareDomainData.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.UniversalStore.HardwareWorkflow.Cabinets.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.UniversalStore.HardwareWorkflow.Catalogs.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.UniversalStore.HardwareWorkflow.InfReader.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.UniversalStore.HardwareWorkflow.SubmissionBuilder.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.Windows.Build.Appx.AppxPackaging.dll.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.Windows.Build.Appx.AppxSip.dll.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.Windows.Build.Appx.OpcServices.dll.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.Windows.Build.Signing.mssign32.dll.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\Microsoft.Windows.Build.Signing.wintrust.dll.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\mssign32.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\opcservices.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\signtool.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\signtool.exe.manifest">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\WindowsProtectedFiles.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\wintrust.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WDK\wintrust.dll.ini">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="LibGit2Sharp" Version="0.27.0-preview-0182" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
-    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
   </ItemGroup>
 </Project>

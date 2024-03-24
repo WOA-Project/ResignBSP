@@ -228,7 +228,8 @@ namespace ResignBSP
             // 6_3_ARM,10_RS3_ARM64
             // 6_3_ARM
             // 10_RS3_X64
-            GenerateCatalogs(Directory, "10_RS3_ARM64");
+            CleanCatalogs(Directory);
+            GenerateCatalogs(Directory, "6_3_ARM,10_RS3_ARM64");
             SignCatalogs(Directory);
         }
 
@@ -247,7 +248,7 @@ namespace ResignBSP
             }
         }
 
-        private static void GenerateCatalogs(string Directory, string OSKey)
+        private static void CleanCatalogs(string Directory)
         {
             List<string> DirectoriesWithINFFiles = GetDirectoriesWithINFFiles(Directory);
 
@@ -272,7 +273,15 @@ namespace ResignBSP
 
                     File.Delete(cat);
                 }
+            }
+        }
 
+        private static void GenerateCatalogs(string Directory, string OSKey)
+        {
+            List<string> DirectoriesWithINFFiles = GetDirectoriesWithINFFiles(Directory);
+
+            foreach (string dir in DirectoriesWithINFFiles)
+            {
                 Logging.Log($"Generating catalog: {dir}");
                 Process process = new();
                 process.StartInfo.FileName = Constants.INF2CAT;
@@ -281,6 +290,20 @@ namespace ResignBSP
                 _ = process.Start();
                 process.WaitForExit();
                 process.Dispose();
+
+                if (process.ExitCode != 0 && OSKey.Contains(','))
+                {
+                    foreach (string SingleOSKey in OSKey.Split(','))
+                    {
+                        process.Dispose();
+                        process = new();
+                        process.StartInfo.FileName = Constants.INF2CAT;
+                        process.StartInfo.Arguments = $@"/OS:{SingleOSKey} /Driver:""{dir}""";
+                        process.StartInfo.UseShellExecute = false;
+                        process.Start();
+                        process.WaitForExit();
+                    }
+                }
             }
         }
 
